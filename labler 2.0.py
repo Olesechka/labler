@@ -6,11 +6,13 @@ jira_serverurl = 'https://jira.2gis.ru'
 username = ""
 password = ""
 
+#блок авторизации в Jira
 auth_header = "{}:{}".format(username, password)
 auth_header_bytes = bytes(auth_header, encoding='ascii')
 auth_header_b64 = base64.encodebytes(auth_header_bytes)
 auth_header_encoded = str(auth_header_b64, encoding='ascii')
 auth_header_encoded_no_trailing_endline = auth_header_encoded[:-1]
+
 headers = {'Authorization': 'Basic ' + auth_header_encoded_no_trailing_endline,
            'Content-type': 'application/json',
            'Accept': 'application/json'}
@@ -18,47 +20,47 @@ headers = {'Authorization': 'Basic ' + auth_header_encoded_no_trailing_endline,
 url_search = jira_serverurl + '/rest/api/2/search'
 url_issue = jira_serverurl + '/rest/api/2/issue'
 
-search_request = '{"startAt": 0, "maxResults": 10,"jql":"project = SUPPORT AND description is not null and key = SUPPORT-206035 "}'
-
+#запрос к Jira, который возвращает нужную выборку тикетов
+search_request = '{"startAt": 0, "maxResults": 1000,"jql":"project = SUPPORT AND description is not null"}'
+#получение ответа от Jira
 req = requests.post(url_search, data=search_request, headers=headers)
-
+#приведение ответа Jira в текстовый вид
 issues = json.loads(req.text).get('issues')
 
-def recognize_ticket(summary, description):
+#функция обращения к API Grader, возвращает значение будущей метки
+def recognize_class(summary, description):
     body = {'summary': summary, 'description': description}
     url_grader = "http://uk-grader.2gis.local:10000/classify"
     headers = {'content-type': 'application/json'}
     response = requests.post(url_grader, data=json.dumps(body), headers=headers)
     utf_answer = json.loads(response.text)
-    print (utf_answer)
-    result_contents = utf_answer['result_class']
-    most_probable = result_contents[0]
-    not_changed_value = most_probable['class']
-    changed_value = ''
-    if not_changed_value == 'ERM' or not_changed_value == 'Fiji' or not_changed_value == 'IR' or not_changed_value == 'Youla' or not_changed_value == 'Export_buildman':
-        if (isinstance(not_changed_value, str)):
-            l = not_changed_value.split()
-            changed_value = ''
-            for i in l:
-                changed_value += i + '_'
-            changed_value = changed_value[:-1]
-        return changed_value
+    result_class_grader = utf_answer['result_class']
+    index_result_class_grader = result_class_grader[0]
+    recognized_class = index_result_class_grader['class']
 
-def assign_label(ticket, lp):
+    if recognized_class == 'ERM' or recognized_class == 'Fiji' or recognized_class == 'IR' or recognized_class == 'Youla' \
+            or recognized_class == 'Export_buildman':
+        return recognized_class
+
+#функция, которая отправляет запрос на апдейт тикета в Jira
+def assign_label(ticket, new_label):
     jira_server_url = '{}/{}/?notifyUsers=false'.format(url_issue, ticket)
     data = {
         "update": {
-            "labels": [{"add": lp}]
+            "labels": [{"add": new_label}]
         }
     }
-    response = requests.put(jira_server_url, data=json.dumps(data), headers=headers)
-    print(response.text)
+    #проставляется метка
+    requests.put(jira_server_url, data=json.dumps(data), headers=headers)
+
 if issues:
+     #после того, как мы получили ответ от Jira, вытаскиваем нужные нам поля
      for issue in issues:
          issue_key = issue.get('key')
          issue_summary = issue.get('fields').get('summary')
          issue_description = issue.get('fields').get('description')
          issue_labels = issue.get('fields').get('labels')
+         #проверяем на наличие метки в тикете
          if issue_labels == 'FIJI':
              print('FIJI')
          elif issue_labels == 'YouLa':
@@ -66,15 +68,14 @@ if issues:
          elif issue_labels == 'Export/Buildman':
              print ('Export/Buildman')
          else:
-             recognize_ticket(issue_summary, issue_description)
-         label = recognize_ticket(issue_summary, issue_description)
-         lp = ''
+             recognize_class(issue_summary, issue_description)
+         label = recognize_class(issue_summary, issue_description)
+         new_label = ''
+         # приводим все метки к одному виду
          if label == 'Youla':
-             lp = 'YouLa'
+             new_label = 'YouLa'
          elif label == 'Fiji':
-             lp = 'FIJI'
+             new_label = 'FIJI'
          elif label == 'Export_buildman':
-             lp = 'Export/Buildman'
-         assign_label(issue_key, lp)
-else:
-    print("No issues found.")
+             new_label = 'Export/Buildman'
+         assign_label(issue_key, new_label)
