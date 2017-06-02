@@ -21,7 +21,7 @@ url_search = jira_serverurl + '/rest/api/2/search'
 url_issue = jira_serverurl + '/rest/api/2/issue'
 
 #запрос к Jira, который возвращает нужную выборку тикетов
-search_request = '{"startAt": 0, "maxResults": 1000,"jql":"project = SUPPORT AND description is not null"}'
+search_request = '{"startAt": 21000, "maxResults": 1000,"jql":"project = SUPPORT AND description is not null"}'
 #получение ответа от Jira
 req = requests.post(url_search, data=search_request, headers=headers)
 #приведение ответа Jira в текстовый вид
@@ -34,13 +34,15 @@ def recognize_class(summary, description):
     headers = {'content-type': 'application/json'}
     response = requests.post(url_grader, data=json.dumps(body), headers=headers)
     utf_answer = json.loads(response.text)
+    print(utf_answer)
     result_class_grader = utf_answer['result_class']
-    index_result_class_grader = result_class_grader[0]
-    recognized_class = index_result_class_grader['class']
-
-    if recognized_class == 'ERM' or recognized_class == 'Fiji' or recognized_class == 'IR' or recognized_class == 'Youla' \
+    status_grader = utf_answer['message']
+    if status_grader == 'OK':
+        index_result_class_grader = result_class_grader[0]
+        recognized_class = index_result_class_grader['class']
+        if recognized_class == 'ERM' or recognized_class == 'Fiji' or recognized_class == 'IR' or recognized_class == 'Youla' \
             or recognized_class == 'Export_buildman':
-        return recognized_class
+            return recognized_class
 
 #функция, которая отправляет запрос на апдейт тикета в Jira
 def assign_label(ticket, new_label):
@@ -69,8 +71,9 @@ if issues:
              print ('Export/Buildman')
          else:
              recognize_class(issue_summary, issue_description)
+         print(recognize_class(issue_summary, issue_description))
          label = recognize_class(issue_summary, issue_description)
-         new_label = ''
+         new_label = label
          # приводим все метки к одному виду
          if label == 'Youla':
              new_label = 'YouLa'
@@ -78,4 +81,6 @@ if issues:
              new_label = 'FIJI'
          elif label == 'Export_buildman':
              new_label = 'Export/Buildman'
+
          assign_label(issue_key, new_label)
+         print(issue_key)
