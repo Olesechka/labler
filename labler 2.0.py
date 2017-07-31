@@ -4,7 +4,7 @@ import requests
 import logging
 
 logging.basicConfig(format=u'%(levelname)-8s [%(asctime)s] %(message)s', level=logging.DEBUG,
-                             filename=u'mylog.log')
+                    filename=u'C:\Labler\mylog.log')
 jira_serverurl = 'https://jira.2gis.ru'
 username = ""
 password = ""
@@ -24,7 +24,7 @@ url_search = jira_serverurl + '/rest/api/2/search'
 url_issue = jira_serverurl + '/rest/api/2/issue'
 
 #запрос к Jira, который возвращает нужную выборку тикетов
-search_request = '{"startAt": 0, "maxResults": 1000,"jql":"project = SUPPORT AND description is not null AND created >= -24h"}'
+search_request = '{"startAt": 100, "maxResults": 1,"jql":"project = SUPPORT AND description is not null"}'
 #получение ответа от Jira
 req = requests.post(url_search, data=search_request, headers=headers)
 #приведение ответа Jira в текстовый вид
@@ -49,6 +49,7 @@ def recognize_class(summary, description):
 
 #функция, которая отправляет запрос на апдейт тикета в Jira
 def assign_label(ticket, new_label):
+    i = 0
     jira_server_url = '{}/{}/?notifyUsers=false'.format(url_issue, ticket)
     data = {
         "update": {
@@ -57,7 +58,8 @@ def assign_label(ticket, new_label):
     }
     #проставляется метка
     requests.put(jira_server_url, data=json.dumps(data), headers=headers)
-
+all_issue=0
+update_issue=0
 if issues:
      #после того, как мы получили ответ от Jira, вытаскиваем нужные нам поля
      for issue in issues:
@@ -84,4 +86,9 @@ if issues:
          elif label == 'Export_buildman':
              new_label = 'Export/Buildman'
          assign_label(issue_key, new_label)
+         if label:
+             update_issue = update_issue +1
+         all_issue=all_issue+1
 
+logging.info("All issues %s" %all_issue)
+logging.info("Update issues %s" % update_issue)
